@@ -521,7 +521,7 @@ async function HTML() {
       padding: 0;
       margin: 0;
       line-height: 1.6;
-      background: url('https://cf-assets.www.cloudflare.com/dzlvafdwdttg/5B5shLB8bSKIyB9NJ6R1jz/87e7617be2c61603d46003cb3f1bd382/Hero-globe-bg-takeover-xxl.png'),
+      background: url('https://pic1.imgdb.cn/item/67e4d39e0ba3d5a1d7e4b4dc.jpg'),
         linear-gradient(135deg, rgba(253, 101, 60, 0.85) 0%, rgba(251,152,30, 0.85) 100%);
       background-size: cover;
       background-position: center center;
@@ -885,7 +885,7 @@ async function HTML() {
 </head>
 
 <body>
-  <a href="https://github.com/cmliu/CF-Workers-DoH" target="_blank" class="github-corner" aria-label="View source on Github">
+  <a href="https://github.com/" target="_blank" class="github-corner" aria-label="View source on Github">
     <svg viewBox="0 0 250 250" aria-hidden="true">
       <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
       <path
