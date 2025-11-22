@@ -403,8 +403,8 @@ async function DOHRequest(request) {
     // 直接访问端点的处理
     if (method === 'GET' && !url.search) {
       // 如果是直接访问或浏览器访问，返回友好信息
-      return new Response('Bad Request', {
-        status: 400,
+      return new Response('DoH Endpoint is working', { 
+        status: 200,
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Access-Control-Allow-Origin': '*'
@@ -1573,3 +1573,4 @@ async function nginx() {
 	`
   return text;
 }
+
