@@ -394,111 +394,122 @@ async function handleLocalDohRequest(domain, type, hostname) {
 
 // DoH 请求处理函数
 async function DOHRequest(request) {
-  const { method, headers, body } = request;
-  const UA = headers.get('User-Agent') || 'DoH Client';
-  const url = new URL(request.url);
-  const { searchParams } = url;
+    const { method, headers, body } = request;
+    const UA = headers.get('User-Agent') || 'DoH Client';
+    const url = new URL(request.url);
+    const { searchParams } = url;
 
-  try {
-    // 直接访问端点的处理
-    if (method === 'GET' && !url.search) {
-      // 如果是直接访问或浏览器访问，返回友好信息
-      return new Response('DoH Endpoint is working', { 
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Access-Control-Allow-Origin': '*'
+    try {
+        // 浏览器直接访问 (无参数)，返回欢迎语
+        // 这对应你截图里的 "DoH Endpoint is working"
+        if (method === 'GET' && !url.search) {
+            return new Response('DoH Endpoint is working', {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            });
         }
-      });
+
+        let response;
+        let isJsonMode = false;
+
+        // 根据请求类型转发给上游
+        if (method === 'GET' && searchParams.has('name')) {
+            // === JSON 模式 (用于你的网页前端查询) ===
+            isJsonMode = true;
+            const searchDoH = searchParams.has('type') ? url.search : url.search + '&type=A';
+            
+            // 尝试请求 DNS-JSON
+            response = await fetch(dnsDoH + searchDoH, {
+                headers: { 'Accept': 'application/dns-json', 'User-Agent': UA }
+            });
+            
+            // 如果失败，尝试备用地址
+            if (!response.ok) {
+                response = await fetch(jsonDoH + searchDoH, {
+                    headers: { 'Accept': 'application/dns-json', 'User-Agent': UA }
+                });
+            }
+
+        } else if (method === 'GET' && searchParams.has('dns')) {
+            // === 标准 DoH GET 模式 (Base64 URL) ===
+            // 某些客户端会用这种方式
+            response = await fetch(dnsDoH + url.search, {
+                headers: { 'Accept': 'application/dns-message', 'User-Agent': UA }
+            });
+
+        } else if (method === 'POST') {
+            // === 标准 DoH POST 模式 (二进制) ===
+            // Chrome 验证主要使用这个模式，最关键的部分
+            response = await fetch(dnsDoH, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/dns-message',
+                    'Content-Type': 'application/dns-message',
+                    'User-Agent': UA
+                },
+                body: body
+            });
+
+        } else {
+            // 处理其他不明确的 GET 请求 (尝试当作标准 DoH 处理)
+            if (method === 'GET') {
+                 response = await fetch(dnsDoH + url.search, {
+                    headers: { 'Accept': 'application/dns-message', 'User-Agent': UA }
+                });
+            } else {
+                return new Response('Method Not Allowed', { 
+                    status: 405,
+                    headers: { 'Content-Type': 'text/plain' }
+                });
+            }
+        }
+
+        // 处理上游返回的响应
+        // 如果上游出错，直接透传错误
+        if (!response.ok) {
+            return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers
+            });
+        }
+
+        // 重构响应头 (修复 Chrome 验证的核心步骤)
+        const responseHeaders = new Headers(response.headers);
+
+        // 设置 CORS 允许跨域
+        responseHeaders.set('Access-Control-Allow-Origin', '*');
+        responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        responseHeaders.delete('Content-Length');
+        if (isJsonMode) {
+            // 如果是网页查询，返回 JSON
+            responseHeaders.set('Content-Type', 'application/json; charset=UTF-8');
+        } else {
+            responseHeaders.set('Content-Type', 'application/dns-message');
+        }
+
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+
+    } catch (error) {
+        console.error("DoH 请求处理错误:", error);
+        return new Response(JSON.stringify({
+            error: `DoH 请求处理错误: ${error.message}`,
+            stack: error.stack
+        }, null, 4), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
     }
-
-    // 根据请求方法和参数构建转发请求
-    let response;
-
-    if (method === 'GET' && searchParams.has('name')) {
-      const searchDoH = searchParams.has('type') ? url.search : url.search + '&type=A';
-      // 处理 JSON 格式的 DoH 请求
-      response = await fetch(dnsDoH + searchDoH, {
-        headers: {
-          'Accept': 'application/dns-json',
-          'User-Agent': UA
-        }
-      });
-      // 如果 DoHUrl 请求非成功（状态码 200），则再请求 jsonDoH
-      if (!response.ok) response = await fetch(jsonDoH + searchDoH, {
-        headers: {
-          'Accept': 'application/dns-json',
-          'User-Agent': UA
-        }
-      });
-    } else if (method === 'GET') {
-      // 处理 base64url 格式的 GET 请求
-      response = await fetch(dnsDoH + url.search, {
-        headers: {
-          'Accept': 'application/dns-message',
-          'User-Agent': UA
-        }
-      });
-    } else if (method === 'POST') {
-      // 处理 POST 请求
-      response = await fetch(dnsDoH, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/dns-message',
-          'Content-Type': 'application/dns-message',
-          'User-Agent': UA
-        },
-        body: body
-      });
-
-    } else {
-      // 其他不支持的请求方式
-      return new Response('不支持的请求格式: DoH请求需要包含name或dns参数，或使用POST方法', {
-        status: 400,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`DoH 返回错误 (${response.status}): ${errorText.substring(0, 200)}`);
-    }
-
-    // 创建一个新的响应头对象
-    const responseHeaders = new Headers(response.headers);
-    // 设置跨域资源共享 (CORS) 的头部信息
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    responseHeaders.set('Access-Control-Allow-Headers', '*');
-    
-    // 检查是否为JSON格式的DoH请求，确保设置正确的Content-Type
-    if (method === 'GET' && searchParams.has('name')) {
-      // 对于JSON格式的DoH请求，明确设置Content-Type为application/json
-      responseHeaders.set('Content-Type', 'application/json');
-    }
-
-    // 返回响应
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders
-    });
-  } catch (error) {
-    console.error("DoH 请求处理错误:", error);
-    return new Response(JSON.stringify({
-      error: `DoH 请求处理错误: ${error.message}`,
-      stack: error.stack
-    }, null, 4), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
-  }
 }
 
 async function HTML() {
@@ -1573,4 +1584,5 @@ async function nginx() {
 	`
   return text;
 }
+
 
