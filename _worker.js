@@ -521,7 +521,7 @@ async function HTML() {
       padding: 0;
       margin: 0;
       line-height: 1.6;
-      background: url('https://img10.360buyimg.com/ddimg/e20001'),
+      background: url('https://pic1.imgdb.cn/item/694161ee0dd29e7e224a8e2c.png'),
         linear-gradient(135deg, rgba(253, 101, 60, 0.85) 0%, rgba(251,152,30, 0.85) 100%);
       background-size: cover;
       background-position: center center;
@@ -1682,3 +1682,4 @@ async function nginx() {
 	`
   return text;
 }
+
